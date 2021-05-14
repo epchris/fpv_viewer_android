@@ -33,28 +33,37 @@ public class VideoReaderExoplayer {
         VideoReaderExoplayer(SurfaceView videoSurface, Context c) {
             surfaceView = videoSurface;
             context = c;
+            initPlayer();
         }
 
-        public void setInputStream(AndroidUSBInputStream input) {
+        public void start(AndroidUSBInputStream input) {
             inputStream = input;
+            DataSpec dataSpec = new DataSpec(Uri.EMPTY,0,C.LENGTH_UNSET);
+            DataSource.Factory  dataSourceFactory = () -> (DataSource) new InputStreamDataSource(context, dataSpec, inputStream);
+
+            MediaSource mediaSource = new ProgressiveMediaSource.Factory(dataSourceFactory,H264Extractor.FACTORY).createMediaSource(MediaItem.fromUri(Uri.EMPTY));
+            mPlayer.setMediaSource(mediaSource);
+
+
+            mPlayer.play();
+
         }
 
-        public void start() {
+        public void stop() {
+            if (mPlayer != null) {
+                mPlayer.stop();
+                mPlayer.release();
+            }
+        }
+
+        private void initPlayer() {
             DefaultLoadControl loadControl = new DefaultLoadControl.Builder().setBufferDurationsMs(32*1024, 64*1024, 0, 0).build();
             mPlayer = new SimpleExoPlayer.Builder(context).setLoadControl(loadControl).build();
             mPlayer.setVideoSurfaceView(surfaceView);
             mPlayer.setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
             mPlayer.setWakeMode(C.WAKE_MODE_LOCAL);
 
-            DataSpec dataSpec = new DataSpec(Uri.EMPTY,0,C.LENGTH_UNSET);
-
-            DataSource.Factory  dataSourceFactory = () -> (DataSource) new InputStreamDataSource(context, dataSpec, inputStream);
-
-            MediaSource mediaSource = new ProgressiveMediaSource.Factory(dataSourceFactory,H264Extractor.FACTORY).createMediaSource(MediaItem.fromUri(Uri.EMPTY));
-            mPlayer.setMediaSource(mediaSource);
-
             mPlayer.prepare();
-            mPlayer.play();
             mPlayer.addListener(new ExoPlayer.EventListener() {
                 @Override
                 public void onPlayerError(ExoPlaybackException error) {
@@ -64,16 +73,11 @@ public class VideoReaderExoplayer {
                             Toast.makeText(context, "Video not ready", Toast.LENGTH_SHORT).show();
                             (new Handler(Looper.getMainLooper())).postDelayed(() -> {
                                 inputStream.startReadThread();
-                                start(); //retry in 10 sec
+                                start(inputStream); //retry in 10 sec
                             }, 10000);
                             break;
                     }
                 }
             });
-        }
-
-        public void stop() {
-            if (mPlayer != null)
-                mPlayer.release();
         }
 }
